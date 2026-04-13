@@ -43,10 +43,18 @@
     }
   },
   "i18n": {
-    "en-US": { "appName": "Gauge" },
-    "ru-RU": { "appName": "Gauge" },
-    "uk-UA": { "appName": "Gauge" },
-    "fr-FR": { "appName": "Gauge" }
+    "en-US": {
+      "appName": "Gauge"
+    },
+    "ru-RU": {
+      "appName": "Gauge"
+    },
+    "uk-UA": {
+      "appName": "Gauge"
+    },
+    "fr-FR": {
+      "appName": "Gauge"
+    }
   }
 },
   "defaultLanguage": "en-US",
