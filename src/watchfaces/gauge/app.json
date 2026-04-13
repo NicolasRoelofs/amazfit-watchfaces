@@ -13,7 +13,7 @@
     "cover": [
       "cover.png"
     ],
-    "description": "Gauge watchface. Source code here: https://github.com/novvember/amazfit-watchfaces"
+    "description": "Gauge watchface.\nSource code here: https://github.com/novvember/amazfit-watchfaces"
   },
   "runtime": {
     "apiVersion": {
@@ -55,8 +55,7 @@
     "fr-FR": {
       "appName": "Gauge"
     }
-  }
-},
+  },
   "defaultLanguage": "en-US",
   "debug": false
 }
