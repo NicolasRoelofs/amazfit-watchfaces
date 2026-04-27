@@ -1,6 +1,6 @@
 const lang = DeviceRuntimeCore.HmUtils.getLanguage()
 const isRusLang = ['ru-RU', 'uk-UA'].includes(lang)
-const isFrLang = lang === 'fr-FR'
+export const isFrLang = lang === 'fr-FR'
 
 const { width, height } = hmSetting.getDeviceInfo()
 
