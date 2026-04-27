@@ -72,7 +72,9 @@ WatchFace({
 
     const update = () => {
       const { day, week } = timeSensor;
-      const text = `${day} ${WEEKDAYS[week - 1]}`;
+      const text = isFrLang
+        ? `${WEEKDAYS[week - 1]} ${day}`
+        : `${day} ${WEEKDAYS[week - 1]}`;
       textWidget.updateText(text);
     };
 
@@ -131,7 +133,7 @@ WatchFace({
       maxLength: isFrLang ? 13 : 11,
       angleStart: isFrLang ? 200 : 189,
       radius: px(204),
-      gap: isFrLang ? px(-5) : px(-3),
+      gap: isFrLang ? px(-1) : px(-3),
       isTextReversed: true,
     });
     const sleepSensor = hmSensor.createSensor(hmSensor.id.SLEEP);
