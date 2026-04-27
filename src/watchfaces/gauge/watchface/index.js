@@ -4,6 +4,7 @@ import {
   SLEEP_TEXT,
   STEPS_POSTFIX,
   WEEKDAYS,
+  isFrLang,
 } from '../utils/constants';
 import { decline } from '../utils/decline';
 import { getSleepTimeString } from '../utils/getSleepTime';
@@ -127,10 +128,10 @@ WatchFace({
   buildSleep() {
     const textWidget = new CircleTextWidget({
       text: '00:00 SLEEP',
-      maxLength: 11,
-      angleStart: 189,
+      maxLength: isFrLang ? 13 : 11,
+      angleStart: isFrLang ? 184 : 189,
       radius: px(204),
-      gap: px(-3),
+      gap: isFrLang ? px(0) : px(-3),
       isTextReversed: true,
     });
     const sleepSensor = hmSensor.createSensor(hmSensor.id.SLEEP);
@@ -188,8 +189,8 @@ WatchFace({
   buildSteps() {
     const textWidget = new CircleTextWidget({
       text: '00000 STEPS',
-      maxLength: 11,
-      angleStart: 245,
+      maxLength: isFrLang ? 9 : 11,
+      angleStart: isFrLang ? 252 : 245,
       radius: px(204),
       gap: px(-3),
       isTextReversed: false,
