@@ -129,9 +129,9 @@ WatchFace({
     const textWidget = new CircleTextWidget({
       text: '00:00 SLEEP',
       maxLength: isFrLang ? 13 : 11,
-      angleStart: isFrLang ? 184 : 189,
+      angleStart: isFrLang ? 200 : 189,
       radius: px(204),
-      gap: isFrLang ? px(0) : px(-3),
+      gap: isFrLang ? px(1) : px(-3),
       isTextReversed: true,
     });
     const sleepSensor = hmSensor.createSensor(hmSensor.id.SLEEP);
@@ -158,7 +158,7 @@ WatchFace({
     const textWidget = new CircleTextWidget({
       text: '000%',
       maxLength: 4,
-      angleStart: 227,
+      angleStart: isFrLang ? 238 : 227,
       radius: px(204),
       gap: px(-3),
       isTextReversed: true,
@@ -190,7 +190,7 @@ WatchFace({
     const textWidget = new CircleTextWidget({
       text: '00000 STEPS',
       maxLength: isFrLang ? 9 : 11,
-      angleStart: isFrLang ? 252 : 245,
+      angleStart: isFrLang ? 258 : 245,
       radius: px(204),
       gap: px(-3),
       isTextReversed: false,
