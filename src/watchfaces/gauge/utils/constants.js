@@ -28,7 +28,7 @@ export const HEART_TEXT = isRusLang
 export const SLEEP_TEXT = isRusLang
   ? 'СОН %s'
   : isFrLang
-    ? 'SOMMEIL %s'
+    ? 'SOMM\u200AEIL %s'
     : 'SLEEP %s'
 
 const STEPS_POSTFIX_RU = ['шаг', 'шага', 'шагов']
