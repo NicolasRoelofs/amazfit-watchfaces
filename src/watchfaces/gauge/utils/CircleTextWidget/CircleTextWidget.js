@@ -32,14 +32,12 @@ export class CircleTextWidget {
     });
   }
 
-  _getCharWidth(char) {
-    return TEXT_CHAR_WIDTHS[char] || TEXT_CHAR_WIDTH;
-  }
-
   _createWidgets({ angleStart, radius, gap, isTextReversed }) {
     if (isTextReversed) {
       angleStart = -1 * (180 - angleStart);
     }
+  
+    const imageAngle = calculateAnglularLength(radius, this._imageWidth);
   
     let gapAngle = calculateAnglularLength(radius, gap);
   
@@ -47,30 +45,17 @@ export class CircleTextWidget {
       gapAngle *= -1;
     }
   
-    let currentAngle = angleStart;
+    let extraAngle = 0;
   
     return this._chars.map((char, i) => {
       if (i > 0) {
-        const previousChar = this._chars[i - 1];
-  
-        const previousWidth = this._getCharWidth(previousChar);
-        const currentWidth = this._getCharWidth(char);
-  
-        const pair = `${previousChar}${char}`;
+        const pair = `${this._chars[i - 1]}${char}`;
         const extraGap = this._kerningPairs[pair] || 0;
-        
-        const spacingPx =
-          previousWidth / 2 +
-          currentWidth / 2 +
-          gap +
-          extraGap;
   
-        const spacingAngle = calculateAnglularLength(radius, spacingPx);
-  
-        currentAngle += isTextReversed ? -spacingAngle : spacingAngle;
+        if (extraGap) {
+          extraAngle += calculateAnglularLength(radius, px(extraGap));
+        }
       }
-  
-      const charWidth = this._getCharWidth(char);
   
       return hmUI.createWidget(hmUI.widget.IMG, {
         src: this._charImages[char] || this._charImages[' '],
@@ -78,13 +63,15 @@ export class CircleTextWidget {
         h: this._screenSize,
         x: 0,
         y: 0,
-        pos_x: this._screenSize / 2 - charWidth / 2,
+        pos_x: this._screenSize / 2 - this._imageWidth / 2,
         pos_y: isTextReversed
           ? this._screenSize / 2 + radius
           : this._screenSize / 2 - radius - this._imageHeight,
         center_x: this._screenSize / 2,
         center_y: this._screenSize / 2,
-        angle: currentAngle,
+        angle: isTextReversed
+          ? angleStart - i * imageAngle - i * gapAngle - extraAngle
+          : angleStart + i * imageAngle + i * gapAngle + extraAngle,
         show_level: hmUI.show_level.ONLY_NORMAL,
       });
     });
