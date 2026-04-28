@@ -7,7 +7,7 @@ import { calculateAnglularLength, radiansToDegrees } from './utils';
  * @param {Object} params
  */
 export class CircleTextWidget {
-  constructor({ maxLength, text, angleStart, radius, gap, isTextReversed }) {
+  constructor({ maxLength, text, angleStart, radius, gap, isTextReversed, kerningPairs = {} }) {
     this._charImages = TEXT_CHARS;
     this._imageWidth = TEXT_CHAR_WIDTH;
     this._imageHeight = TEXT_CHAR_HEIGHT;
@@ -43,8 +43,19 @@ export class CircleTextWidget {
       gapAngle *= -1;
     }
 
-    return this._chars.map((char, i) =>
-      hmUI.createWidget(hmUI.widget.IMG, {
+    let extraAngle = 0;
+
+    return this._chars.map((char, i) => {
+      if (i > 0) {
+        const pair = `${this._chars[i - 1]}${char}`;
+        const extraGap = this._kerningPairs[pair] || 0;
+    
+        if (extraGap) {
+          extraAngle += calculateAnglularLength(radius, px(extraGap));
+        }
+      }
+      
+      return hmUI.createWidget(hmUI.widget.IMG, {
         src: this._charImages[char] || this._charImages[' '],
         w: this._screenSize,
         h: this._screenSize,
@@ -57,8 +68,8 @@ export class CircleTextWidget {
         center_x: this._screenSize / 2,
         center_y: this._screenSize / 2,
         angle: isTextReversed
-          ? angleStart - i * imageAngle - i * gapAngle
-          : angleStart + i * imageAngle + i * gapAngle,
+          ? angleStart - i * imageAngle - i * gapAngle - extraAngle
+          : angleStart + i * imageAngle + i * gapAngle + extraAngle,
         show_level: hmUI.show_level.ONLY_NORMAL,
       }),
     );
