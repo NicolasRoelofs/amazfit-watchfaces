@@ -86,3 +86,53 @@ images[':'] = buildFileName('colon');
 images['°'] = buildFileName('degree');
 
 export const TEXT_CHARS = images;
+
+export const TEXT_CHAR_WIDTHS = {
+  ' ': 8,
+
+  // très étroites
+  i: 8,
+  l: 9,
+  j: 9,
+
+  // étroites
+  t: 10,
+  f: 10,
+  r: 11,
+
+  // normales
+  s: 13,
+  e: 13,
+  a: 13,
+  c: 13,
+  n: 14,
+  u: 14,
+  o: 14,
+  d: 14,
+
+  // larges
+  h: 15,
+  k: 15,
+  x: 15,
+  y: 15,
+
+  // très larges
+  m: 18,
+  w: 18,
+
+  // chiffres (souvent homogènes mais à ajuster)
+  '0': 14,
+  '1': 10,
+  '2': 13,
+  '3': 13,
+  '4': 13,
+  '5': 13,
+  '6': 14,
+  '7': 12,
+  '8': 14,
+  '9': 14,
+
+  // symboles utiles
+  ':': 8,
+  '%': 16,
+};
