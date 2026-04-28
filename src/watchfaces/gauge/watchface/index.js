@@ -133,8 +133,11 @@ WatchFace({
       maxLength: isFrLang ? 13 : 11,
       angleStart: isFrLang ? 200 : 189,
       radius: px(204),
-      gap: isFrLang ? px(-3) : px(-3),
+      gap: px(-3),
       isTextReversed: true,
+      kerningPairs: {
+        mm: 3,
+      },
     });
     const sleepSensor = hmSensor.createSensor(hmSensor.id.SLEEP);
 
