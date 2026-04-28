@@ -1,4 +1,4 @@
-import { TEXT_CHAR_HEIGHT, TEXT_CHAR_WIDTH, TEXT_CHARS } from './chars';
+import { TEXT_CHAR_HEIGHT, TEXT_CHAR_WIDTH, TEXT_CHAR_WIDTHS, TEXT_CHARS } from './chars';
 import { calculateAnglularLength, radiansToDegrees } from './utils';
 
 /**
@@ -32,51 +32,64 @@ export class CircleTextWidget {
     });
   }
 
+  _getCharWidth(char) {
+    return TEXT_CHAR_WIDTHS[char] || TEXT_CHAR_WIDTH;
+  }
+
   _createWidgets({ angleStart, radius, gap, isTextReversed }) {
     if (isTextReversed) {
       angleStart = -1 * (180 - angleStart);
     }
-
-    const imageAngle = calculateAnglularLength(radius, this._imageWidth);
-
+  
     let gapAngle = calculateAnglularLength(radius, gap);
-
+  
     if (gap < 0) {
       gapAngle *= -1;
     }
-
-    let extraAngle = 0;
-
+  
+    let currentAngle = angleStart;
+  
     return this._chars.map((char, i) => {
       if (i > 0) {
-        const pair = `${this._chars[i - 1]}${char}`;
+        const previousChar = this._chars[i - 1];
+  
+        const previousWidth = this._getCharWidth(previousChar);
+        const currentWidth = this._getCharWidth(char);
+  
+        const pair = `${previousChar}${char}`;
         const extraGap = this._kerningPairs[pair] || 0;
-    
-        if (extraGap) {
-          extraAngle += calculateAnglularLength(radius, px(extraGap));
-        }
+        
+        const spacingPx =
+          previousWidth / 2 +
+          currentWidth / 2 +
+          gap +
+          extraGap;
+  
+        const spacingAngle = calculateAnglularLength(radius, spacingPx);
+  
+        currentAngle += isTextReversed ? -spacingAngle : spacingAngle;
       }
-      
+  
+      const charWidth = this._getCharWidth(char);
+  
       return hmUI.createWidget(hmUI.widget.IMG, {
         src: this._charImages[char] || this._charImages[' '],
         w: this._screenSize,
         h: this._screenSize,
         x: 0,
         y: 0,
-        pos_x: this._screenSize / 2 - this._imageWidth / 2,
+        pos_x: this._screenSize / 2 - charWidth / 2,
         pos_y: isTextReversed
           ? this._screenSize / 2 + radius
           : this._screenSize / 2 - radius - this._imageHeight,
         center_x: this._screenSize / 2,
         center_y: this._screenSize / 2,
-        angle: isTextReversed
-          ? angleStart - i * imageAngle - i * gapAngle - extraAngle
-          : angleStart + i * imageAngle + i * gapAngle + extraAngle,
+        angle: currentAngle,
         show_level: hmUI.show_level.ONLY_NORMAL,
+      });
     });
-  });
-}
-
+  }
+  
   updateText(text) {
     const newTextChars = text
       .toLowerCase()
