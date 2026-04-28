@@ -136,10 +136,7 @@ WatchFace({
       gap: px(-3),
       isTextReversed: true,
       kerningPairs: {
-        om: -1,
-        mm: 3,
-        me: -1,
-        ei: -1,
+        mm: 0.5,
       },
     });
     const sleepSensor = hmSensor.createSensor(hmSensor.id.SLEEP);
