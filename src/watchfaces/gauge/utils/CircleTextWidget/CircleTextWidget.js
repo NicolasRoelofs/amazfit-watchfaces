@@ -16,6 +16,8 @@ export class CircleTextWidget {
 
     this._maxLength = maxLength;
 
+    this._kerningPairs = kerningPairs;
+
     this._chars = text
       .toLowerCase()
       .slice(0, maxLength)
@@ -71,9 +73,9 @@ export class CircleTextWidget {
           ? angleStart - i * imageAngle - i * gapAngle - extraAngle
           : angleStart + i * imageAngle + i * gapAngle + extraAngle,
         show_level: hmUI.show_level.ONLY_NORMAL,
-      }),
-    );
-  }
+    });
+  });
+}
 
   updateText(text) {
     const newTextChars = text
