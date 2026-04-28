@@ -1,0 +1,41 @@
+msgid "time"
+msgstr "Heure"
+
+msgid "steps"
+msgstr "Pas"
+
+msgid "heart"
+msgstr "Cardio"
+
+msgid "temperature"
+msgstr "Température"
+
+msgid "battery"
+msgstr "Batterie"
+
+msgid "date"
+msgstr "Date"
+
+msgid "empty"
+msgstr "Vide"
+
+msgid "mon"
+msgstr "LUN"
+
+msgid "tue"
+msgstr "MAR"
+
+msgid "wed"
+msgstr "MER"
+
+msgid "thu"
+msgstr "JEU"
+
+msgid "fri"
+msgstr "VEN"
+
+msgid "sat"
+msgstr "SAM"
+
+msgid "sun"
+msgstr "DIM"
