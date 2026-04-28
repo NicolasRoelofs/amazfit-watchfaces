@@ -1,0 +1,54 @@
+name: Build Nonius Watchface
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/watchfaces/nonius/**"
+      - ".github/workflows/build-nonius.yml"
+  pull_request:
+    paths:
+      - "src/watchfaces/nonius/**"
+      - ".github/workflows/build-nonius.yml"
+
+jobs:
+  build-nonius:
+    name: Build nonius .zab
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/watchfaces/nonius
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Zeus CLI
+        run: npm install -g @zeppos/zeus-cli
+
+      - name: Show Zeus version
+        run: zeus -v
+
+      - name: Build watchface
+        run: zeus build
+
+      - name: List build output
+        run: |
+          pwd
+          ls -la
+          ls -la dist || true
+
+      - name: Upload Nonius artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nonius-zab
+          path: src/watchfaces/nonius/dist/**
+          if-no-files-found: error
