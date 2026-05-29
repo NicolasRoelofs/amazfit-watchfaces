@@ -1,8 +1,5 @@
 import { formatNumber } from '../utils/formatNumber';
-import {
-  getAngleFromHours,
-  getAngleFromHours24,
-} from '../utils/getAngleFromTime';
+import { getAngleFromHours } from '../utils/getAngleFromTime';
 import { getCoordsFromAngle } from '../utils/getCoordsFromAngle';
 import {
   DISK_IMAGE_CENTER_RADIUS,
