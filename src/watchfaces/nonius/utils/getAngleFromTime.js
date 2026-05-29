@@ -26,3 +26,8 @@ export function getAngleFromHours(hours, minutes = 0) {
   const hourValue = (hours + minutes / 60) % 12;
   return (hourValue * 360) / 12;
 }
+
+export function getAngleFromHours24(hours, minutes = 0) {
+  const hourValue = (hours + minutes / 60) % 24;
+  return (hourValue * 360) / 24;
+}
