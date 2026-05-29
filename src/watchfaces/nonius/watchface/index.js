@@ -54,19 +54,15 @@ WatchFace({
 
       const is12HourFormat = hmSetting.getTimeFormat() === 0;
       
-      const timeAngle = is12HourFormat
-        ? getAngleFromHours(hour, minute)
-        : getAngleFromHours24(hour, minute);
+      // Toujours en 12h pour la géométrie du disque et du tick rouge
+      const timeAngle = getAngleFromHours(hour, minute);
+      const baseHourValue12 = Math.round(hour + minute / 60) % 12 || 12;
+      const deltaAngle = getAngleFromHours(baseHourValue12) - timeAngle;
       
-      const baseHourValue = is12HourFormat
-        ? Math.round(hour + minute / 60) % 12 || 12
-        : Math.round(hour + minute / 60) % 24;
-      
-      const deltaAngle = is12HourFormat
-        ? getAngleFromHours(baseHourValue) - timeAngle
-        : getAngleFromHours24(baseHourValue) - timeAngle;
-      
+      // Seulement pour choisir l’image du disque
+      const baseHourValue24 = Math.round(hour + minute / 60) % 24;
       const diskFolder = is12HourFormat ? 'time' : 'time24';
+      const diskValue = is12HourFormat ? baseHourValue12 : baseHourValue24;
       
       const { x, y } = getCoordsFromAngle(timeAngle);
       const centerX = DISK_IMAGE_CENTER_RADIUS * x + DISK_IMAGE_SIZE;
@@ -78,7 +74,7 @@ WatchFace({
 
       diskWidget.setProperty(hmUI.prop.MORE, {
         ...DISK_IMAGE_PROPS,
-        src: `${diskFolder}/disk_${baseHourValue}.png`,
+        src: `${diskFolder}/disk_${diskValue}.png`,
         angle: 45 + timeAngle + deltaAngle,
         pos_x: deltaX,
         pos_y: deltaY,
