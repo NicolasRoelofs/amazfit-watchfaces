@@ -1,0 +1,17 @@
+msgid "steps"
+msgstr "Steps"
+
+msgid "battery"
+msgstr "Battery"
+
+msgid "heart rate"
+msgstr "Heart Rate"
+
+msgid "sun"
+msgstr "Sun"
+
+msgid "sleep time"
+msgstr "Sleep Time"
+
+msgid "empty"
+msgstr "Empty"
