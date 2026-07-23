@@ -1,11 +1,29 @@
 const FONT = 'fonts/Inter_28pt-Light.ttf';
 const FONT_SIZE = px(32);
 
-const BACKGROUNDS = new Array(6).fill(null).map((_, i) => ({
-  id: i + 1,
-  preview: `backgrounds/${i + 1}.png`,
-  path: `backgrounds/${i + 1}.png`,
-}));
+/**
+ * Fonds 1 à 6 : couleurs fixes existantes.
+ * Fond 7 : mode couleur aléatoire quotidienne.
+ *
+ * Pour le mode 7 :
+ * - preview utilise 7-preview.png dans le menu de personnalisation ;
+ * - path utilise 7.png, une image transparente, afin que le rectangle
+ *   coloré créé dans index.js reste visible.
+ */
+export const DAILY_RANDOM_BACKGROUND_ID = 7;
+
+const BACKGROUNDS = [
+  ...new Array(6).fill(null).map((_, i) => ({
+    id: i + 1,
+    preview: `backgrounds/${i + 1}.png`,
+    path: `backgrounds/${i + 1}.png`,
+  })),
+  {
+    id: DAILY_RANDOM_BACKGROUND_ID,
+    preview: 'backgrounds/7-preview.png',
+    path: 'backgrounds/7.png',
+  },
+];
 
 export const EDIT_BACKGROUND_PROPS = {
   edit_id: 101,
@@ -18,14 +36,29 @@ export const EDIT_BACKGROUND_PROPS = {
   tips_x: px(180),
   tips_y: px(50),
   tips_bg: 'edit/tip.png',
-  show_level: hmUI.show_level.ONLY_NORMAL | hmUI.show_level.ONLY_EDIT,
+  show_level:
+    hmUI.show_level.ONLY_NORMAL |
+    hmUI.show_level.ONLY_EDIT,
+};
+
+export const DAILY_RANDOM_BACKGROUND_PROPS = {
+  x: 0,
+  y: 0,
+  w: px(480),
+  h: px(480),
+  color: 0x000000,
+  show_level:
+    hmUI.show_level.ONLY_NORMAL |
+    hmUI.show_level.ONLY_EDIT,
 };
 
 export const BACKGROUND_GRADIENT_IMAGE_PROPS = {
   x: 0,
   y: 0,
   src: 'backgrounds/gradient.png',
-  show_level: hmUI.show_level.ONLY_NORMAL | hmUI.show_level.ONLY_EDIT,
+  show_level:
+    hmUI.show_level.ONLY_NORMAL |
+    hmUI.show_level.ONLY_EDIT,
 };
 
 export const DATE_TEXT_PROPS = {
