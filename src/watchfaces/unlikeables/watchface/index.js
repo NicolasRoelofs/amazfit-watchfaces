@@ -6,7 +6,6 @@ import { formatNumber } from '../../../utils/formatNumber';
 import {
   BACKGROUND_GRADIENT_IMAGE_PROPS,
   BATTERY_STATUS_PROPS,
-  DAILY_RANDOM_BACKGROUND_ID,
   DAILY_RANDOM_BACKGROUND_PROPS,
   DATA_TEXT_PROPS,
   DATE_TEXT_PROPS,
@@ -18,7 +17,6 @@ import { gettext } from 'i18n';
 
 /**
  * Transforme la date locale en graine numérique.
- * La graine est identique pendant toute une journée.
  */
 function getDateSeed(timeSensor) {
   return (
@@ -29,9 +27,7 @@ function getDateSeed(timeSensor) {
 }
 
 /**
- * Générateur pseudo-aléatoire déterministe 32 bits.
- * Il évite Math.random(), qui pourrait changer à chaque reconstruction
- * de la watchface pendant une même journée.
+ * Mélange déterministe 32 bits.
  */
 function mixSeed(seed) {
   let value = seed | 0;
@@ -41,46 +37,62 @@ function mixSeed(seed) {
 }
 
 /**
- * Produit une couleur RGB différente chaque jour.
- * Chaque composante reste comprise entre 48 et 223 afin d'éviter
- * les couleurs presque noires ou presque blanches.
+ * Convertit une couleur HSL en RGB Zepp OS.
  */
-function getDailyBackgroundColor(timeSensor) {
-  const value = mixSeed(getDateSeed(timeSensor));
+function hslToRgb(hue, saturation, lightness) {
+  const s = saturation / 100;
+  const l = lightness / 100;
 
-  const red = 48 + ((value >>> 16) & 0xff) % 176;
-  const green = 48 + ((value >>> 8) & 0xff) % 176;
-  const blue = 48 + (value & 0xff) % 176;
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const section = hue / 60;
+  const x = chroma * (1 - Math.abs((section % 2) - 1));
+
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (section < 1) {
+    red = chroma;
+    green = x;
+  } else if (section < 2) {
+    red = x;
+    green = chroma;
+  } else if (section < 3) {
+    green = chroma;
+    blue = x;
+  } else if (section < 4) {
+    green = x;
+    blue = chroma;
+  } else if (section < 5) {
+    red = x;
+    blue = chroma;
+  } else {
+    red = chroma;
+    blue = x;
+  }
+
+  const match = l - chroma / 2;
+
+  red = Math.round((red + match) * 255);
+  green = Math.round((green + match) * 255);
+  blue = Math.round((blue + match) * 255);
 
   return (red << 16) | (green << 8) | blue;
 }
 
 /**
- * WATCHFACE_EDIT_BG renvoie normalement l'objet sélectionné avec
- * hmUI.prop.CURRENT_CONFIG. Cette fonction accepte plusieurs formes
- * possibles afin de rester tolérante selon la version du firmware.
+ * Couleur vive quotidienne :
+ * - saturation 60 à 90 % ;
+ * - luminosité 35 à 60 % ;
+ * - noir, blanc et gris exclus.
  */
-function getBackgroundId(backgroundConfig) {
-  if (typeof backgroundConfig === 'number') {
-    return backgroundConfig;
-  }
+function getDailyBackgroundColor(timeSensor) {
+  const value = mixSeed(getDateSeed(timeSensor));
+  const hue = value % 360;
+  const saturation = 60 + ((value >>> 9) % 31);
+  const lightness = 35 + ((value >>> 17) % 26);
 
-  if (!backgroundConfig) {
-    return EDIT_BACKGROUND_PROPS.default_id;
-  }
-
-  if (typeof backgroundConfig.id === 'number') {
-    return backgroundConfig.id;
-  }
-
-  if (
-    typeof backgroundConfig.path === 'string' &&
-    backgroundConfig.path.indexOf('backgrounds/7.png') !== -1
-  ) {
-    return DAILY_RANDOM_BACKGROUND_ID;
-  }
-
-  return EDIT_BACKGROUND_PROPS.default_id;
+  return hslToRgb(hue, saturation, lightness);
 }
 
 WatchFace({
@@ -102,73 +114,67 @@ WatchFace({
   },
 
   buildBackground() {
-    const editBackgroundWidget = hmUI.createWidget(
+    const timeSensor = hmSensor.createSensor(hmSensor.id.TIME);
+
+    /*
+     * Le rectangle est toujours créé EN PREMIER.
+     * Les fonds 1 à 6 le recouvrent.
+     * Le fond 7 transparent le laisse apparaître.
+     * Cela évite toute dépendance à CURRENT_CONFIG.
+     */
+    const randomBackgroundWidget = hmUI.createWidget(
+      hmUI.widget.FILL_RECT,
+      {
+        ...DAILY_RANDOM_BACKGROUND_PROPS,
+        color: getDailyBackgroundColor(timeSensor),
+      },
+    );
+
+    hmUI.createWidget(
       hmUI.widget.WATCHFACE_EDIT_BG,
       EDIT_BACKGROUND_PROPS,
     );
 
-    const selectedConfig = editBackgroundWidget.getProperty(
-      hmUI.prop.CURRENT_CONFIG,
-    );
-    const selectedBackgroundId = getBackgroundId(selectedConfig);
+    let previousDateSeed = -1;
 
-    if (selectedBackgroundId === DAILY_RANDOM_BACKGROUND_ID) {
-      const timeSensor = hmSensor.createSensor(hmSensor.id.TIME);
+    const updateDailyBackground = () => {
+      const currentDateSeed = getDateSeed(timeSensor);
 
-      const randomBackgroundWidget = hmUI.createWidget(
-        hmUI.widget.FILL_RECT,
-        {
-          ...DAILY_RANDOM_BACKGROUND_PROPS,
-          color: getDailyBackgroundColor(timeSensor),
-        },
+      if (currentDateSeed === previousDateSeed) {
+        return;
+      }
+
+      previousDateSeed = currentDateSeed;
+
+      randomBackgroundWidget.setProperty(
+        hmUI.prop.COLOR,
+        getDailyBackgroundColor(timeSensor),
       );
+    };
 
-      let previousDateSeed = -1;
+    hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
+      resume_call: () => {
+        const screenType = hmSetting.getScreenType();
 
-      const updateDailyBackground = () => {
-        const currentDateSeed = getDateSeed(timeSensor);
-
-        if (currentDateSeed === previousDateSeed) {
-          return;
-        }
-
-        previousDateSeed = currentDateSeed;
-
-        randomBackgroundWidget.setProperty(
-          hmUI.prop.COLOR,
-          getDailyBackgroundColor(timeSensor),
-        );
-      };
-
-      hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
-        resume_call: () => {
-          const screenType = hmSetting.getScreenType();
-
-          if (
-            screenType === hmSetting.screen_type.WATCHFACE ||
-            screenType === hmSetting.screen_type.SETTINGS
-          ) {
-            timeSensor.addEventListener?.(
-              timeSensor.event.MINUTEEND,
-              updateDailyBackground,
-            );
-            updateDailyBackground();
-          }
-        },
-
-        pause_call: () => {
-          timeSensor.removeEventListener?.(
+        if (
+          screenType === hmSetting.screen_type.WATCHFACE ||
+          screenType === hmSetting.screen_type.SETTINGS
+        ) {
+          timeSensor.addEventListener?.(
             timeSensor.event.MINUTEEND,
             updateDailyBackground,
           );
-        },
-      });
-    }
+          updateDailyBackground();
+        }
+      },
+      pause_call: () => {
+        timeSensor.removeEventListener?.(
+          timeSensor.event.MINUTEEND,
+          updateDailyBackground,
+        );
+      },
+    });
 
-    /**
-     * Le dégradé existant reste au-dessus du fond, comme avant.
-     * Il n'est affiché ni en AOD ni sur l'écran éteint.
-     */
     hmUI.createWidget(
       hmUI.widget.IMG,
       BACKGROUND_GRADIENT_IMAGE_PROPS,
@@ -238,7 +244,6 @@ WatchFace({
           update();
         }
       },
-
       pause_call: () => {
         timeSensor.removeEventListener?.(
           timeSensor.event.MINUTEEND,
@@ -289,7 +294,6 @@ WatchFace({
           update();
         }
       },
-
       pause_call: () => {
         stepSensor?.removeEventListener?.(
           hmSensor.event.CHANGE,
