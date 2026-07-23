@@ -6,19 +6,18 @@ import { formatNumber } from '../../../utils/formatNumber';
 import {
   BACKGROUND_GRADIENT_IMAGE_PROPS,
   BATTERY_STATUS_PROPS,
-  DAILY_RANDOM_BACKGROUND_PROPS,
+  DAILY_RANDOM_BACKGROUND_ID,
   DATA_TEXT_PROPS,
   DATE_TEXT_PROPS,
   DISCONNECT_STATUS_PROPS,
   EDIT_BACKGROUND_PROPS,
+  HOURLY_RANDOM_BACKGROUND_ID,
+  RANDOM_BACKGROUND_PROPS,
 } from './index.r.layout';
 import { TimeTextWidget } from './TimeTextWidget';
 import { gettext } from 'i18n';
 
-/**
- * Transforme la date locale en graine numérique.
- */
-function getDateSeed(timeSensor) {
+function getDailySeed(timeSensor) {
   return (
     timeSensor.year * 10000 +
     timeSensor.month * 100 +
@@ -26,9 +25,15 @@ function getDateSeed(timeSensor) {
   );
 }
 
-/**
- * Mélange déterministe 32 bits.
- */
+function getHourlySeed(timeSensor) {
+  return (
+    timeSensor.year * 1000000 +
+    timeSensor.month * 10000 +
+    timeSensor.day * 100 +
+    timeSensor.hour
+  );
+}
+
 function mixSeed(seed) {
   let value = seed | 0;
   value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
@@ -36,13 +41,9 @@ function mixSeed(seed) {
   return (value ^ (value >>> 16)) >>> 0;
 }
 
-/**
- * Convertit une couleur HSL en RGB Zepp OS.
- */
 function hslToRgb(hue, saturation, lightness) {
   const s = saturation / 100;
   const l = lightness / 100;
-
   const chroma = (1 - Math.abs(2 * l - 1)) * s;
   const section = hue / 60;
   const x = chroma * (1 - Math.abs((section % 2) - 1));
@@ -72,7 +73,6 @@ function hslToRgb(hue, saturation, lightness) {
   }
 
   const match = l - chroma / 2;
-
   red = Math.round((red + match) * 255);
   green = Math.round((green + match) * 255);
   blue = Math.round((blue + match) * 255);
@@ -80,19 +80,73 @@ function hslToRgb(hue, saturation, lightness) {
   return (red << 16) | (green << 8) | blue;
 }
 
-/**
- * Couleur vive quotidienne :
- * - saturation 60 à 90 % ;
- * - luminosité 35 à 60 % ;
- * - noir, blanc et gris exclus.
- */
-function getDailyBackgroundColor(timeSensor) {
-  const value = mixSeed(getDateSeed(timeSensor));
+function getRandomBackgroundColor(seed) {
+  const value = mixSeed(seed);
   const hue = value % 360;
   const saturation = 60 + ((value >>> 9) % 31);
   const lightness = 35 + ((value >>> 17) % 26);
 
   return hslToRgb(hue, saturation, lightness);
+}
+
+/**
+ * Normalise plusieurs formats possibles de CURRENT_CONFIG.
+ * Les chemins 7.png et 8.png sont prioritaires car non ambigus.
+ */
+function getBackgroundId(config) {
+  if (!config) {
+    return EDIT_BACKGROUND_PROPS.default_id;
+  }
+
+  const pathCandidates = [
+    config.path,
+    config.preview,
+    config.src,
+    config.image,
+  ];
+
+  for (let i = 0; i < pathCandidates.length; i += 1) {
+    const path = pathCandidates[i];
+
+    if (typeof path === 'string') {
+      if (path.indexOf('backgrounds/8.png') !== -1) {
+        return HOURLY_RANDOM_BACKGROUND_ID;
+      }
+
+      if (path.indexOf('backgrounds/7.png') !== -1) {
+        return DAILY_RANDOM_BACKGROUND_ID;
+      }
+    }
+  }
+
+  const idCandidates = [
+    config.id,
+    config.value,
+    config.current,
+    config.selected,
+    config.selected_id,
+    config.current_id,
+  ];
+
+  for (let i = 0; i < idCandidates.length; i += 1) {
+    if (typeof idCandidates[i] === 'number') {
+      return idCandidates[i];
+    }
+  }
+
+  if (typeof config === 'number') {
+    /*
+     * Les valeurs 1 à 8 sont généralement des identifiants.
+     * La valeur 0 est traitée comme le premier index.
+     */
+    return config === 0 ? 1 : config;
+  }
+
+  if (typeof config.index === 'number') {
+    return config.index + 1;
+  }
+
+  return EDIT_BACKGROUND_PROPS.default_id;
 }
 
 WatchFace({
@@ -114,41 +168,56 @@ WatchFace({
   },
 
   buildBackground() {
-    const timeSensor = hmSensor.createSensor(hmSensor.id.TIME);
-
     /*
-     * Le rectangle est toujours créé EN PREMIER.
-     * Les fonds 1 à 6 le recouvrent.
-     * Le fond 7 transparent le laisse apparaître.
-     * Cela évite toute dépendance à CURRENT_CONFIG.
+     * Un seul rectangle dynamique est créé derrière WATCHFACE_EDIT_BG.
+     * Les fonds 1 à 6 le masquent. Les images transparentes 7 et 8
+     * le laissent apparaître.
      */
     const randomBackgroundWidget = hmUI.createWidget(
       hmUI.widget.FILL_RECT,
-      {
-        ...DAILY_RANDOM_BACKGROUND_PROPS,
-        color: getDailyBackgroundColor(timeSensor),
-      },
+      RANDOM_BACKGROUND_PROPS,
     );
 
-    hmUI.createWidget(
+    const editBackgroundWidget = hmUI.createWidget(
       hmUI.widget.WATCHFACE_EDIT_BG,
       EDIT_BACKGROUND_PROPS,
     );
 
-    let previousDateSeed = -1;
+    const timeSensor = hmSensor.createSensor(hmSensor.id.TIME);
+    let previousSeed = -1;
+    let previousMode = -1;
 
-    const updateDailyBackground = () => {
-      const currentDateSeed = getDateSeed(timeSensor);
+    const updateRandomBackground = () => {
+      const selectedConfig = editBackgroundWidget.getProperty(
+        hmUI.prop.CURRENT_CONFIG,
+      );
+      const selectedBackgroundId = getBackgroundId(selectedConfig);
 
-      if (currentDateSeed === previousDateSeed) {
+      let currentSeed = -1;
+
+      if (selectedBackgroundId === DAILY_RANDOM_BACKGROUND_ID) {
+        currentSeed = getDailySeed(timeSensor);
+      } else if (
+        selectedBackgroundId === HOURLY_RANDOM_BACKGROUND_ID
+      ) {
+        currentSeed = getHourlySeed(timeSensor);
+      } else {
         return;
       }
 
-      previousDateSeed = currentDateSeed;
+      if (
+        currentSeed === previousSeed &&
+        selectedBackgroundId === previousMode
+      ) {
+        return;
+      }
+
+      previousSeed = currentSeed;
+      previousMode = selectedBackgroundId;
 
       randomBackgroundWidget.setProperty(
         hmUI.prop.COLOR,
-        getDailyBackgroundColor(timeSensor),
+        getRandomBackgroundColor(currentSeed),
       );
     };
 
@@ -162,15 +231,15 @@ WatchFace({
         ) {
           timeSensor.addEventListener?.(
             timeSensor.event.MINUTEEND,
-            updateDailyBackground,
+            updateRandomBackground,
           );
-          updateDailyBackground();
+          updateRandomBackground();
         }
       },
       pause_call: () => {
         timeSensor.removeEventListener?.(
           timeSensor.event.MINUTEEND,
-          updateDailyBackground,
+          updateRandomBackground,
         );
       },
     });
@@ -244,6 +313,7 @@ WatchFace({
           update();
         }
       },
+
       pause_call: () => {
         timeSensor.removeEventListener?.(
           timeSensor.event.MINUTEEND,
@@ -294,6 +364,7 @@ WatchFace({
           update();
         }
       },
+
       pause_call: () => {
         stepSensor?.removeEventListener?.(
           hmSensor.event.CHANGE,

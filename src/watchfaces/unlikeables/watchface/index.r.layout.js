@@ -2,15 +2,12 @@ const FONT = 'fonts/Inter_28pt-Light.ttf';
 const FONT_SIZE = px(32);
 
 /**
- * Fonds 1 à 6 : couleurs fixes existantes.
- * Fond 7 : mode couleur aléatoire quotidienne.
- *
- * Pour le mode 7 :
- * - preview utilise 7-preview.png dans le menu de personnalisation ;
- * - path utilise 7.png, une image transparente, afin que le rectangle
- *   coloré créé dans index.js reste visible.
+ * Fonds 1 à 6 : images fixes existantes.
+ * Fond 7 : couleur pseudo-aléatoire quotidienne.
+ * Fond 8 : couleur pseudo-aléatoire horaire.
  */
 export const DAILY_RANDOM_BACKGROUND_ID = 7;
+export const HOURLY_RANDOM_BACKGROUND_ID = 8;
 
 const BACKGROUNDS = [
   ...new Array(6).fill(null).map((_, i) => ({
@@ -22,6 +19,11 @@ const BACKGROUNDS = [
     id: DAILY_RANDOM_BACKGROUND_ID,
     preview: 'backgrounds/7-preview.png',
     path: 'backgrounds/7.png',
+  },
+  {
+    id: HOURLY_RANDOM_BACKGROUND_ID,
+    preview: 'backgrounds/8-preview.png',
+    path: 'backgrounds/8.png',
   },
 ];
 
@@ -41,12 +43,12 @@ export const EDIT_BACKGROUND_PROPS = {
     hmUI.show_level.ONLY_EDIT,
 };
 
-export const DAILY_RANDOM_BACKGROUND_PROPS = {
+export const RANDOM_BACKGROUND_PROPS = {
   x: 0,
   y: 0,
   w: px(480),
   h: px(480),
-  color: 0x000000,
+  color: 0x303030,
   show_level:
     hmUI.show_level.ONLY_NORMAL |
     hmUI.show_level.ONLY_EDIT,
