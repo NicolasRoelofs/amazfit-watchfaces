@@ -18,11 +18,7 @@ import { TimeTextWidget } from './TimeTextWidget';
 import { gettext } from 'i18n';
 
 function getDailySeed(timeSensor) {
-  return (
-    timeSensor.year * 10000 +
-    timeSensor.month * 100 +
-    timeSensor.day
-  );
+  return timeSensor.year * 10000 + timeSensor.month * 100 + timeSensor.day;
 }
 
 function getHourlySeed(timeSensor) {
@@ -34,11 +30,13 @@ function getHourlySeed(timeSensor) {
   );
 }
 
+// Mélange sans Math.imul pour une meilleure compatibilité avec les anciens runtimes.
 function mixSeed(seed) {
-  let value = seed | 0;
-  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
-  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
-  return (value ^ (value >>> 16)) >>> 0;
+  let value = seed >>> 0;
+  value ^= value << 13;
+  value ^= value >>> 17;
+  value ^= value << 5;
+  return value >>> 0;
 }
 
 function hslToRgb(hue, saturation, lightness) {
@@ -89,13 +87,41 @@ function getRandomBackgroundColor(seed) {
   return hslToRgb(hue, saturation, lightness);
 }
 
+function parseBackgroundId(value) {
+  if (typeof value === 'number' && isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const text = value.trim();
+
+  if (/^\d+$/.test(text)) {
+    return parseInt(text, 10);
+  }
+
+  const pathMatch = text.match(/backgrounds\/(7|8)(?:-preview)?\.png/);
+  if (pathMatch) {
+    return parseInt(pathMatch[1], 10);
+  }
+
+  return null;
+}
+
 /**
- * Normalise plusieurs formats possibles de CURRENT_CONFIG.
- * Les chemins 7.png et 8.png sont prioritaires car non ambigus.
+ * Normalise les formes connues de CURRENT_CONFIG.
+ * Les chemins de fichiers sont testés en premier car ils ne sont pas ambigus.
  */
 function getBackgroundId(config) {
-  if (!config) {
-    return EDIT_BACKGROUND_PROPS.default_id;
+  if (config == null) {
+    return null;
+  }
+
+  const directId = parseBackgroundId(config);
+  if (directId !== null) {
+    return directId === 0 ? 1 : directId;
   }
 
   const pathCandidates = [
@@ -106,16 +132,9 @@ function getBackgroundId(config) {
   ];
 
   for (let i = 0; i < pathCandidates.length; i += 1) {
-    const path = pathCandidates[i];
-
-    if (typeof path === 'string') {
-      if (path.indexOf('backgrounds/8.png') !== -1) {
-        return HOURLY_RANDOM_BACKGROUND_ID;
-      }
-
-      if (path.indexOf('backgrounds/7.png') !== -1) {
-        return DAILY_RANDOM_BACKGROUND_ID;
-      }
+    const pathId = parseBackgroundId(pathCandidates[i]);
+    if (pathId !== null) {
+      return pathId;
     }
   }
 
@@ -129,24 +148,37 @@ function getBackgroundId(config) {
   ];
 
   for (let i = 0; i < idCandidates.length; i += 1) {
-    if (typeof idCandidates[i] === 'number') {
-      return idCandidates[i];
+    const id = parseBackgroundId(idCandidates[i]);
+    if (id !== null) {
+      return id;
     }
   }
 
-  if (typeof config === 'number') {
-    /*
-     * Les valeurs 1 à 8 sont généralement des identifiants.
-     * La valeur 0 est traitée comme le premier index.
-     */
-    return config === 0 ? 1 : config;
+  const index = parseBackgroundId(config.index);
+  if (index !== null) {
+    return index + 1;
   }
 
-  if (typeof config.index === 'number') {
-    return config.index + 1;
+  // Dernier recours : cherche 7/8 dans la représentation JSON complète.
+  try {
+    const serialized = JSON.stringify(config);
+    const serializedId = parseBackgroundId(serialized);
+    if (serializedId !== null) {
+      return serializedId;
+    }
+
+    if (serialized.indexOf('backgrounds/8') !== -1) {
+      return HOURLY_RANDOM_BACKGROUND_ID;
+    }
+
+    if (serialized.indexOf('backgrounds/7') !== -1) {
+      return DAILY_RANDOM_BACKGROUND_ID;
+    }
+  } catch (error) {
+    // Certaines implémentations peuvent retourner un objet non sérialisable.
   }
 
-  return EDIT_BACKGROUND_PROPS.default_id;
+  return null;
 }
 
 WatchFace({
@@ -168,11 +200,7 @@ WatchFace({
   },
 
   buildBackground() {
-    /*
-     * Un seul rectangle dynamique est créé derrière WATCHFACE_EDIT_BG.
-     * Les fonds 1 à 6 le masquent. Les images transparentes 7 et 8
-     * le laissent apparaître.
-     */
+    // Le rectangle dynamique doit être créé avant le fond éditable.
     const randomBackgroundWidget = hmUI.createWidget(
       hmUI.widget.FILL_RECT,
       RANDOM_BACKGROUND_PROPS,
@@ -184,8 +212,21 @@ WatchFace({
     );
 
     const timeSensor = hmSensor.createSensor(hmSensor.id.TIME);
+
     let previousSeed = -1;
     let previousMode = -1;
+    let isListening = false;
+
+    const applyColor = (color) => {
+      // MORE est plus fiable que COLOR seul sur certaines versions de Zepp OS.
+      randomBackgroundWidget.setProperty(hmUI.prop.MORE, {
+        x: RANDOM_BACKGROUND_PROPS.x,
+        y: RANDOM_BACKGROUND_PROPS.y,
+        w: RANDOM_BACKGROUND_PROPS.w,
+        h: RANDOM_BACKGROUND_PROPS.h,
+        color,
+      });
+    };
 
     const updateRandomBackground = () => {
       const selectedConfig = editBackgroundWidget.getProperty(
@@ -193,56 +234,75 @@ WatchFace({
       );
       const selectedBackgroundId = getBackgroundId(selectedConfig);
 
-      let currentSeed = -1;
+      let currentSeed;
+      let effectiveMode = selectedBackgroundId;
 
       if (selectedBackgroundId === DAILY_RANDOM_BACKGROUND_ID) {
         currentSeed = getDailySeed(timeSensor);
-      } else if (
-        selectedBackgroundId === HOURLY_RANDOM_BACKGROUND_ID
-      ) {
+      } else if (selectedBackgroundId === HOURLY_RANDOM_BACKGROUND_ID) {
+        currentSeed = getHourlySeed(timeSensor);
+      } else if (selectedBackgroundId === null) {
+        /*
+         * Repli anti-écran gris : certains firmwares ne renvoient pas
+         * CURRENT_CONFIG. Une couleur horaire est quand même calculée.
+         * Les fonds fixes 1 à 6 la masquent entièrement.
+         */
+        effectiveMode = HOURLY_RANDOM_BACKGROUND_ID;
         currentSeed = getHourlySeed(timeSensor);
       } else {
+        previousSeed = -1;
+        previousMode = selectedBackgroundId;
         return;
       }
 
-      if (
-        currentSeed === previousSeed &&
-        selectedBackgroundId === previousMode
-      ) {
+      if (currentSeed === previousSeed && effectiveMode === previousMode) {
         return;
       }
 
       previousSeed = currentSeed;
-      previousMode = selectedBackgroundId;
+      previousMode = effectiveMode;
+      applyColor(getRandomBackgroundColor(currentSeed));
+    };
 
-      randomBackgroundWidget.setProperty(
-        hmUI.prop.COLOR,
-        getRandomBackgroundColor(currentSeed),
+    const startListening = () => {
+      if (!isListening) {
+        timeSensor.addEventListener?.(
+          timeSensor.event.MINUTEEND,
+          updateRandomBackground,
+        );
+        isListening = true;
+      }
+
+      updateRandomBackground();
+    };
+
+    const stopListening = () => {
+      if (!isListening) {
+        return;
+      }
+
+      timeSensor.removeEventListener?.(
+        timeSensor.event.MINUTEEND,
+        updateRandomBackground,
       );
+      isListening = false;
     };
 
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         const screenType = hmSetting.getScreenType();
-
         if (
           screenType === hmSetting.screen_type.WATCHFACE ||
           screenType === hmSetting.screen_type.SETTINGS
         ) {
-          timeSensor.addEventListener?.(
-            timeSensor.event.MINUTEEND,
-            updateRandomBackground,
-          );
-          updateRandomBackground();
+          startListening();
         }
       },
-      pause_call: () => {
-        timeSensor.removeEventListener?.(
-          timeSensor.event.MINUTEEND,
-          updateRandomBackground,
-        );
-      },
+      pause_call: stopListening,
     });
+
+    // Applique une couleur dès la construction pour éviter le gris initial.
+    updateRandomBackground();
 
     hmUI.createWidget(
       hmUI.widget.IMG,
@@ -273,38 +333,26 @@ WatchFace({
       textWidget.set(timeText);
 
       const day = getDay(timeSensor);
-
       if (prevDay === day) {
         return;
       }
 
       prevDay = day;
-
       const monthKey = getMonth(timeSensor);
-      const dayText = gettext(monthKey).replace(
-        '{day}',
-        day.toString(),
-      );
-
+      const dayText = gettext(monthKey).replace('{day}', day.toString());
       const weekdayKey = getWeekDay(timeSensor);
       const weekDay = gettext(weekdayKey);
       const dateText = weekDay + ',' + '\n' + dayText;
 
-      dateTextWidget.setProperty(
-        hmUI.prop.TEXT,
-        dateText,
-      );
+      dateTextWidget.setProperty(hmUI.prop.TEXT, dateText);
     };
 
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         if (
-          hmSetting.getScreenType() ===
-            hmSetting.screen_type.WATCHFACE ||
-          hmSetting.getScreenType() ===
-            hmSetting.screen_type.AOD ||
-          hmSetting.getScreenType() ===
-            hmSetting.screen_type.SETTINGS
+          hmSetting.getScreenType() === hmSetting.screen_type.WATCHFACE ||
+          hmSetting.getScreenType() === hmSetting.screen_type.AOD ||
+          hmSetting.getScreenType() === hmSetting.screen_type.SETTINGS
         ) {
           timeSensor.addEventListener?.(
             timeSensor.event.MINUTEEND,
@@ -313,7 +361,6 @@ WatchFace({
           update();
         }
       },
-
       pause_call: () => {
         timeSensor.removeEventListener?.(
           timeSensor.event.MINUTEEND,
@@ -340,36 +387,24 @@ WatchFace({
       }
 
       prevValue = current;
+      const text = `${formatNumber(current, ' ')} ${gettext('steps')} ${
+        current >= target ? '✓' : ''
+      }`.trim();
 
-      const text = `${formatNumber(current, ' ')} ${gettext(
-        'steps',
-      )} ${current >= target ? '✓' : ''}`.trim();
-
-      textWidget.setProperty(
-        hmUI.prop.TEXT,
-        text,
-      );
+      textWidget.setProperty(hmUI.prop.TEXT, text);
     };
 
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         if (
-          hmSetting.getScreenType() ===
-          hmSetting.screen_type.WATCHFACE
+          hmSetting.getScreenType() === hmSetting.screen_type.WATCHFACE
         ) {
-          stepSensor?.addEventListener?.(
-            hmSensor.event.CHANGE,
-            update,
-          );
+          stepSensor?.addEventListener?.(hmSensor.event.CHANGE, update);
           update();
         }
       },
-
       pause_call: () => {
-        stepSensor?.removeEventListener?.(
-          hmSensor.event.CHANGE,
-          update,
-        );
+        stepSensor?.removeEventListener?.(hmSensor.event.CHANGE, update);
       },
     });
   },
@@ -383,10 +418,7 @@ WatchFace({
 
   buildBatteryStatus() {
     const MIN_VALUE = 20;
-    const batterySensor = hmSensor.createSensor(
-      hmSensor.id.BATTERY,
-    );
-
+    const batterySensor = hmSensor.createSensor(hmSensor.id.BATTERY);
     const imageWidget = hmUI.createWidget(
       hmUI.widget.IMG,
       BATTERY_STATUS_PROPS,
@@ -394,18 +426,13 @@ WatchFace({
 
     const update = () => {
       const { current = 0 } = batterySensor;
-
-      imageWidget.setProperty(
-        hmUI.prop.VISIBLE,
-        current < MIN_VALUE,
-      );
+      imageWidget.setProperty(hmUI.prop.VISIBLE, current < MIN_VALUE);
     };
 
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         if (
-          hmSetting.getScreenType() ===
-          hmSetting.screen_type.WATCHFACE
+          hmSetting.getScreenType() === hmSetting.screen_type.WATCHFACE
         ) {
           update();
         }
