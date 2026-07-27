@@ -17,25 +17,64 @@ import {
 import { TimeTextWidget } from './TimeTextWidget';
 import { gettext } from 'i18n';
 
+const GOLDEN_ANGLE = 137;
+const MIN_SATURATION = 70;
+const SATURATION_RANGE = 13;
+const MIN_LIGHTNESS = 42;
+const LIGHTNESS_RANGE = 9;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getSafeTime(timeSensor) {
+  return {
+    year: Math.max(1970, Number(timeSensor.year) || 1970),
+    month: clamp(Number(timeSensor.month) || 1, 1, 12),
+    day: clamp(Number(timeSensor.day) || 1, 1, 31),
+    hour: clamp(Number(timeSensor.hour) || 0, 0, 23),
+  };
+}
+
+function isLeapYear(year) {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function getDayOfYear(year, month, day) {
+  const daysBeforeMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  return daysBeforeMonth[month - 1] + day + (month > 2 && isLeapYear(year) ? 1 : 0);
+}
+
+// Index réellement consécutif d'un jour à l'autre, y compris aux changements de mois/année.
+function getCalendarDayIndex(timeSensor) {
+  const { year, month, day } = getSafeTime(timeSensor);
+  const previousYear = year - 1;
+  const daysBeforeYear =
+    previousYear * 365 +
+    Math.floor(previousYear / 4) -
+    Math.floor(previousYear / 100) +
+    Math.floor(previousYear / 400);
+
+  return daysBeforeYear + getDayOfYear(year, month, day);
+}
+
 function getDailySeed(timeSensor) {
-  return timeSensor.year * 10000 + timeSensor.month * 100 + timeSensor.day;
+  return getCalendarDayIndex(timeSensor);
 }
 
 function getHourlySeed(timeSensor) {
-  return (
-    timeSensor.year * 1000000 +
-    timeSensor.month * 10000 +
-    timeSensor.day * 100 +
-    timeSensor.hour
-  );
+  const { hour } = getSafeTime(timeSensor);
+  return getCalendarDayIndex(timeSensor) * 24 + hour;
 }
 
-// Mélange sans Math.imul pour une meilleure compatibilité avec les anciens runtimes.
+// Mélange sans Math.imul pour les anciens runtimes Zepp OS.
 function mixSeed(seed) {
-  let value = seed >>> 0;
-  value ^= value << 13;
-  value ^= value >>> 17;
-  value ^= value << 5;
+  let value = (seed + 0x9e3779b9) >>> 0;
+  value ^= value >>> 16;
+  value = (value + (value << 3)) >>> 0;
+  value ^= value >>> 4;
+  value = (value + (value << 10)) >>> 0;
+  value ^= value >>> 15;
   return value >>> 0;
 }
 
@@ -45,7 +84,6 @@ function hslToRgb(hue, saturation, lightness) {
   const chroma = (1 - Math.abs(2 * l - 1)) * s;
   const section = hue / 60;
   const x = chroma * (1 - Math.abs((section % 2) - 1));
-
   let red = 0;
   let green = 0;
   let blue = 0;
@@ -78,13 +116,32 @@ function hslToRgb(hue, saturation, lightness) {
   return (red << 16) | (green << 8) | blue;
 }
 
-function getRandomBackgroundColor(seed) {
+function getColorVariation(seed) {
   const value = mixSeed(seed);
-  const hue = value % 360;
-  const saturation = 60 + ((value >>> 9) % 31);
-  const lightness = 35 + ((value >>> 17) % 26);
+  return {
+    saturation: MIN_SATURATION + ((value >>> 9) % SATURATION_RANGE),
+    lightness: MIN_LIGHTNESS + ((value >>> 17) % LIGHTNESS_RANGE),
+  };
+}
 
-  return hslToRgb(hue, saturation, lightness);
+function getDailyBackgroundColor(timeSensor) {
+  const dayIndex = getCalendarDayIndex(timeSensor);
+  const variation = getColorVariation(dayIndex ^ 0x27d4eb2d);
+
+  // Deux jours consécutifs sont espacés de 137°, donc visuellement très différents.
+  const hue = (dayIndex * GOLDEN_ANGLE) % 360;
+  return hslToRgb(hue, variation.saturation, variation.lightness);
+}
+
+function getHourlyBackgroundColor(timeSensor) {
+  const { hour } = getSafeTime(timeSensor);
+  const dayIndex = getCalendarDayIndex(timeSensor);
+  const dailyOffset = mixSeed(dayIndex ^ 0x85ebca6b) % 360;
+  const variation = getColorVariation(getHourlySeed(timeSensor));
+
+  // Les 24 heures couvrent tout le cercle chromatique, avec un ordre différent chaque jour.
+  const hue = (dailyOffset + hour * GOLDEN_ANGLE) % 360;
+  return hslToRgb(hue, variation.saturation, variation.lightness);
 }
 
 function parseBackgroundId(value) {
@@ -109,7 +166,6 @@ function parseBackgroundId(value) {
 
   return null;
 }
-
 /**
  * Normalise les formes connues de CURRENT_CONFIG.
  * Les chemins de fichiers sont testés en premier car ils ne sont pas ambigus.
@@ -130,7 +186,6 @@ function getBackgroundId(config) {
     config.src,
     config.image,
   ];
-
   for (let i = 0; i < pathCandidates.length; i += 1) {
     const pathId = parseBackgroundId(pathCandidates[i]);
     if (pathId !== null) {
@@ -153,7 +208,6 @@ function getBackgroundId(config) {
       return id;
     }
   }
-
   const index = parseBackgroundId(config.index);
   if (index !== null) {
     return index + 1;
@@ -170,7 +224,6 @@ function getBackgroundId(config) {
     if (serialized.indexOf('backgrounds/8') !== -1) {
       return HOURLY_RANDOM_BACKGROUND_ID;
     }
-
     if (serialized.indexOf('backgrounds/7') !== -1) {
       return DAILY_RANDOM_BACKGROUND_ID;
     }
@@ -194,7 +247,6 @@ WatchFace({
     this.buildDisconnectStatus();
     this.buildBatteryStatus();
   },
-
   onDestroy() {
     console.log('watchface destroying');
   },
@@ -212,7 +264,6 @@ WatchFace({
     );
 
     const timeSensor = hmSensor.createSensor(hmSensor.id.TIME);
-
     let previousSeed = -1;
     let previousMode = -1;
     let isListening = false;
@@ -227,7 +278,6 @@ WatchFace({
         color,
       });
     };
-
     const updateRandomBackground = () => {
       const selectedConfig = editBackgroundWidget.getProperty(
         hmUI.prop.CURRENT_CONFIG,
@@ -235,12 +285,14 @@ WatchFace({
       const selectedBackgroundId = getBackgroundId(selectedConfig);
 
       let currentSeed;
+      let color;
       let effectiveMode = selectedBackgroundId;
-
       if (selectedBackgroundId === DAILY_RANDOM_BACKGROUND_ID) {
         currentSeed = getDailySeed(timeSensor);
+        color = getDailyBackgroundColor(timeSensor);
       } else if (selectedBackgroundId === HOURLY_RANDOM_BACKGROUND_ID) {
         currentSeed = getHourlySeed(timeSensor);
+        color = getHourlyBackgroundColor(timeSensor);
       } else if (selectedBackgroundId === null) {
         /*
          * Repli anti-écran gris : certains firmwares ne renvoient pas
@@ -249,19 +301,19 @@ WatchFace({
          */
         effectiveMode = HOURLY_RANDOM_BACKGROUND_ID;
         currentSeed = getHourlySeed(timeSensor);
+        color = getHourlyBackgroundColor(timeSensor);
       } else {
         previousSeed = -1;
         previousMode = selectedBackgroundId;
         return;
       }
-
       if (currentSeed === previousSeed && effectiveMode === previousMode) {
         return;
       }
 
       previousSeed = currentSeed;
       previousMode = effectiveMode;
-      applyColor(getRandomBackgroundColor(currentSeed));
+      applyColor(color);
     };
 
     const startListening = () => {
@@ -275,7 +327,6 @@ WatchFace({
 
       updateRandomBackground();
     };
-
     const stopListening = () => {
       if (!isListening) {
         return;
@@ -287,7 +338,6 @@ WatchFace({
       );
       isListening = false;
     };
-
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         const screenType = hmSetting.getScreenType();
@@ -303,7 +353,6 @@ WatchFace({
 
     // Applique une couleur dès la construction pour éviter le gris initial.
     updateRandomBackground();
-
     hmUI.createWidget(
       hmUI.widget.IMG,
       BACKGROUND_GRADIENT_IMAGE_PROPS,
@@ -320,7 +369,6 @@ WatchFace({
 
     let prevDay = -1;
     let prevTime = '';
-
     const update = () => {
       const { hourText, minuteText } = getTimeTexts(timeSensor);
       const timeText = `${hourText}:${minuteText}`;
@@ -336,7 +384,6 @@ WatchFace({
       if (prevDay === day) {
         return;
       }
-
       prevDay = day;
       const monthKey = getMonth(timeSensor);
       const dayText = gettext(monthKey).replace('{day}', day.toString());
@@ -346,7 +393,6 @@ WatchFace({
 
       dateTextWidget.setProperty(hmUI.prop.TEXT, dateText);
     };
-
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         if (
@@ -369,7 +415,6 @@ WatchFace({
       },
     });
   },
-
   buildSteps() {
     const stepSensor = hmSensor.createSensor(hmSensor.id.STEP);
     const textWidget = hmUI.createWidget(
@@ -390,7 +435,6 @@ WatchFace({
       const text = `${formatNumber(current, ' ')} ${gettext('steps')} ${
         current >= target ? '✓' : ''
       }`.trim();
-
       textWidget.setProperty(hmUI.prop.TEXT, text);
     };
 
@@ -408,7 +452,6 @@ WatchFace({
       },
     });
   },
-
   buildDisconnectStatus() {
     hmUI.createWidget(
       hmUI.widget.IMG_STATUS,
@@ -428,7 +471,6 @@ WatchFace({
       const { current = 0 } = batterySensor;
       imageWidget.setProperty(hmUI.prop.VISIBLE, current < MIN_VALUE);
     };
-
     hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
       resume_call: () => {
         if (
